@@ -294,7 +294,6 @@ def train(net, X, y):
 
 train_log = []
 val_log = []
-import matplotlib.pyplot as plt
 
 for epoch in range(1000):
     loss = train(net, x_train, y_train)
