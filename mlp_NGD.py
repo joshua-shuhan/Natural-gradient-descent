@@ -5,7 +5,7 @@ import pandas as pd
 from scipy import linalg
 
 
-class layer(object):
+class Layer(object):
 
     def __init__(self, *args):
         pass
@@ -175,7 +175,7 @@ class Linear(layer):
         return dEdX
 
 
-class loss_module(layer):
+class LossModule(layer):
 
     def __init__(self, batch_size):
         self.batch_size = batch_size
