@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This is an implementation of natural gradient descent optimization on multilayer perceptron.
+This is an implementation of empirical natural gradient descent optimization on multilayer perceptron.
 Change the boolean variable `usefisher` to see the effect of the algorithm.
 
 @author: Shuhan Zheng
