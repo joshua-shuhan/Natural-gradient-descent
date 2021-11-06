@@ -279,7 +279,6 @@ def train(network, x, y):
     logits = layer_activations[-1]
 
     # compute loss
-
     loss_fn = LossModule(batch_size)
     loss = loss_fn.compute_loss_f(logits, y)
 
