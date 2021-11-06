@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 This is an implementation of natural gradient descent optimization on multilayer perceptron.
+Change the boolean variable `usefisher` to see the effect of the algorithm.
+
 @author: Shuhan Zheng
 
 """
@@ -10,6 +12,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import linalg
+
+np.random.seed(seed=0)
 
 
 class Layer(object):
@@ -24,7 +28,7 @@ class Layer(object):
         pass
 
 
-class Relu(layer):
+class Relu(Layer):
 
     def __init__(self):
         super().__init__()
@@ -38,7 +42,7 @@ class Relu(layer):
         return dEdX
 
 
-class Linear(layer):
+class Linear(Layer):
     def __init__(self, batch_size, input_dim, output_dim, learning_rate, adaptive, usefisher):
         self.w = np.random.randn(input_dim, output_dim) * np.sqrt(2 / (input_dim + output_dim))
         self.b = np.zeros([1, output_dim])
@@ -93,27 +97,27 @@ class Linear(layer):
         assert fisher4b.shape == self.b.shape
         return fisher4w, fisher4b
 
-    def compute_lambdaF(self, softmaxi, input, i):
+    def compute_lambdaf(self, softmaxi, input, i):
         """
         :param softmax: The softmax function, with the shape batchsize*output_dim
         :param input: The input x, with the shape batch_size * 4
         :return: The gradient of the ith sample softmax function w.r.t w, with the shape [vec_dim,3]
         """
         vec_dim = self.input_dim * self.output_dim
-        lambdaFt = np.zeros([vec_dim, softmaxi.shape[0]])
+        lambdaft = np.zeros([vec_dim, softmaxi.shape[0]])
         for j in range(softmaxi.shape[0]):
-            tempM = np.zeros([self.input_dim, self.output_dim])
+            tempm = np.zeros([self.input_dim, self.output_dim])
             for k in range(softmaxi.shape[0]):
                 tempx = np.zeros([self.input_dim, self.output_dim])
                 tempx[:, k] = input[i, :]
                 if k == j:
-                    tempM += softmaxi[j] * (1 - softmaxi[j]) * tempx
+                    tempm += softmaxi[j] * (1 - softmaxi[j]) * tempx
                 else:
-                    tempM += -softmaxi[k] * softmaxi[j] * tempx
+                    tempm += -softmaxi[k] * softmaxi[j] * tempx
 
-            lambdaFt[:, j] = tempM.reshape([vec_dim])
+            lambdaft[:, j] = tempm.reshape([vec_dim])
 
-        return lambdaFt
+        return lambdaft
 
     def compute_fisher_inverse_adp(self, grad_input, input, softmax, epsilont=0.01):
         """
@@ -132,8 +136,8 @@ class Linear(layer):
         fisher_inv = linalg.pinv(fisher_init)
         for i in range(self.batch_size)[1:]:
             softmaxi = softmax[i, :]
-            lambdaF = self.compute_lambdaF(softmaxi, input, i)
-            fisher_inv = (1 + epsilont) * fisher_inv - epsilont * (fisher_inv @ lambdaF) @ (fisher_inv @ lambdaF).T
+            lambdaf = self.compute_lambdaf(softmaxi, input, i)
+            fisher_inv = (1 + epsilont) * fisher_inv - epsilont * (fisher_inv @ lambdaf) @ (fisher_inv @ lambdaf).T
         fisher4w = fisher_inv @ (input.T @ grad_input).reshape((vec_dim, 1))
         fisher4w = fisher4w.reshape(self.input_dim, self.output_dim) / (fisher4w.max())
 
@@ -182,7 +186,7 @@ class Linear(layer):
         return dEdX
 
 
-class LossModule(layer):
+class LossModule(Layer):
 
     def __init__(self, batch_size):
         self.batch_size = batch_size
@@ -240,8 +244,8 @@ y_test = data.iloc[100:, 4].to_numpy().astype(int)
 
 # The boolean variables are used to control applied algorithms
 adaptive = False
-usefisher = True
-# usefisher = False
+usefisher = False
+# usefisher = False # uncomment this command to see the effect of traditional gradient descent.
 
 # Network setup
 learning_rate = 0.002
@@ -263,25 +267,25 @@ def forward(network, X):
     return activations
 
 
-def predict(network, X):
-    logits = forward(network, X)[-1]
+def predict(network, x):
+    logits = forward(network, x)[-1]
     return logits.argmax(axis=-1)  # Returns the indices of the maximum values along an axis
 
 
-def train(network, X, y):
+def train(network, x, y):
     # forward phase; get activations of each layer
-    layer_activations = forward(network, X)
-    layer_inputs = [X, ] + layer_activations
+    layer_activations = forward(network, x)
+    layer_inputs = [x, ] + layer_activations
     logits = layer_activations[-1]
 
     # compute loss
 
-    loss_fn = loss_module(batch_size)
+    loss_fn = LossModule(batch_size)
     loss = loss_fn.compute_loss_f(logits, y)
 
     if adaptive == False:
-        _, loss_grad_GD = loss_fn.backward(logits, y)
-        loss_grad = loss_grad_GD
+        _, loss_grad_gd = loss_fn.backward(logits, y)
+        loss_grad = loss_grad_gd
 
         # backward phase
         for layer_index in range(len(net))[::-1]:
@@ -290,8 +294,8 @@ def train(network, X, y):
         return loss
 
     if adaptive == True:
-        softmax, loss_grad_GD = loss_fn.backward(logits, y)
-        loss_grad = loss_grad_GD
+        softmax, loss_grad_gd = loss_fn.backward(logits, y)
+        loss_grad = loss_grad_gd
         for layer_index in range(len(net))[::-1]:
             layer = net[layer_index]
             loss_grad = layer.backward(layer_inputs[layer_index], loss_grad, softmax)
@@ -309,7 +313,7 @@ for epoch in range(1000):
     train_log.append(loss)
     val_log.append(np.mean(predict(net, x_test) == y_test))
 
-# %%
+# display
 mpl.style.use('seaborn')
 plt.title('Training curve-GD', fontsize=20)
 plt.xlabel('Iteration', fontsize=20)
