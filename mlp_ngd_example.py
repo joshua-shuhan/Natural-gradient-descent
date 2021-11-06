@@ -303,7 +303,6 @@ def train(network, x, y):
 
 
 # Train session
-
 train_log = []
 val_log = []
 
