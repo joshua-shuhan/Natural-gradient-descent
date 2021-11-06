@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+This is an implementation of natural gradient descent optimization on multilayer perceptron.
+@author: Shuhan Zheng
+
+"""
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -218,7 +225,7 @@ class LossModule(layer):
 
 
 # Preprocessing data
-
+# Change catagorical name to numeric value
 data = pd.read_csv('IRIS.csv')
 data.loc[data['species'] == 'Iris-setosa', 'species'] = 0
 data.loc[data['species'] == 'Iris-versicolor', 'species'] = 1
@@ -231,42 +238,43 @@ y_train = data.iloc[0:100, 4].to_numpy().astype(int)
 x_test = data.iloc[100:, 0:4].to_numpy().astype(np.double)
 y_test = data.iloc[100:, 4].to_numpy().astype(int)
 
-# Network setup
+# The boolean variables are used to control applied algorithms
+adaptive = False
+usefisher = True
+# usefisher = False
 
+# Network setup
 learning_rate = 0.002
 batch_size = 100
-# The boolean variables are used to control algorithms
-adaptive = False
-usefisher = False
 net = []
 net.append(Linear(batch_size, 4, 5, learning_rate, adaptive, usefisher))
 net.append(Linear(batch_size, 5, 3, learning_rate, adaptive, usefisher))
 
 
 # Define the computation flow function
-def forward(net, X):
+def forward(network, X):
     activations = []
     input = X
 
-    for layer_i in net:
+    for layer_i in network:
         activations.append(layer_i.forward(input))
         input = activations[-1]
 
     return activations
 
 
-def predict(net, X):
-    logits = forward(net, X)[-1]
+def predict(network, X):
+    logits = forward(network, X)[-1]
     return logits.argmax(axis=-1)  # Returns the indices of the maximum values along an axis
 
 
-def train(net, X, y):
-    ## forward phase; get activations of each layer
-    layer_activations = forward(net, X)
+def train(network, X, y):
+    # forward phase; get activations of each layer
+    layer_activations = forward(network, X)
     layer_inputs = [X, ] + layer_activations
     logits = layer_activations[-1]
 
-    ## compute loss
+    # compute loss
 
     loss_fn = loss_module(batch_size)
     loss = loss_fn.compute_loss_f(logits, y)
