@@ -33,11 +33,11 @@ class Relu(Layer):
     def __init__(self):
         super().__init__()
 
-    def forward(self, input):
-        return np.maximum(0, input)
+    def forward(self, input_):
+        return np.maximum(0, input_)
 
-    def backward(self, input, grad_input):
-        temp = input > 0
+    def backward(self, input_, grad_input):
+        temp = input_ > 0
         dEdX = grad_input * temp
         return dEdX
 
@@ -50,22 +50,22 @@ class Linear(Layer):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-    def forward(self, input):
+    def forward(self, input_):
         """
         Return a matrix after multiplication with weight self.w
 
-        :param input: the shape of input matrix should be batch_size*input_dim
+        :param input_: the shape of input matrix should be batch_size*input_dim
         :return: an output matrix with shape batch_size*output_dim
         """
-        output = input @ self.w + self.b
+        output = input_ @ self.w + self.b
 
         return output
 
-    def compute_fisher_inverse(self, grad_input, input):
+    def compute_fisher_inverse(self, grad_input, input_):
         """
         :param grad_input: with the shape of batch_size*output_dim(from the loss module,bp4NGD or dEdX from the last
         layer).
-        :param input: with the shape of batch_size*input_dim
+        :param input_: with the shape of batch_size*input_dim
         :return: the inverse of empirical fisher information matrix
         """
         assert grad_input.shape[0] == self.batch_size
@@ -73,8 +73,8 @@ class Linear(Layer):
         fisher = np.zeros([vec_dim, vec_dim])
         # Sum up vectorized gradient over a batch
         for i in range(self.batch_size):
-            fisher += np.outer(grad_input[i, :], input[i, :]).reshape((vec_dim, 1)) @ np.outer(grad_input[i, :],
-                                                                                               input[i, :]).reshape(
+            fisher += np.outer(grad_input[i, :], input_[i, :]).reshape((vec_dim, 1)) @ np.outer(grad_input[i, :],
+                                                                                                input_[i, :]).reshape(
                 (vec_dim, 1)).T
         # Take average value
         fisher = fisher / self.batch_size
@@ -82,7 +82,7 @@ class Linear(Layer):
         assert fisher.all() == fisher.T.all()
         fisher_inv = linalg.pinv(fisher)
         # print(fisher_inv)
-        fisher4w = fisher_inv @ (input.T @ grad_input).reshape((vec_dim, 1))
+        fisher4w = fisher_inv @ (input_.T @ grad_input).reshape((vec_dim, 1))
         # Prevent fisher from large norm, which may cause the learning process to be unstable
         fisher4w = fisher4w.reshape(self.input_dim, self.output_dim) / (fisher4w.max())
 
@@ -97,10 +97,10 @@ class Linear(Layer):
         assert fisher4b.shape == self.b.shape
         return fisher4w, fisher4b
 
-    def compute_lambdaf(self, softmaxi, input, i):
+    def compute_lambdaf(self, softmaxi, input_, i):
         """
         :param softmax: The softmax function, with the shape batchsize*output_dim
-        :param input: The input x, with the shape batch_size * 4
+        :param input_: The input x, with the shape batch_size * 4
         :return: The gradient of the ith sample softmax function w.r.t w, with the shape [vec_dim,3]
         """
         vec_dim = self.input_dim * self.output_dim
@@ -109,7 +109,7 @@ class Linear(Layer):
             tempm = np.zeros([self.input_dim, self.output_dim])
             for k in range(softmaxi.shape[0]):
                 tempx = np.zeros([self.input_dim, self.output_dim])
-                tempx[:, k] = input[i, :]
+                tempx[:, k] = input_[i, :]
                 if k == j:
                     tempm += softmaxi[j] * (1 - softmaxi[j]) * tempx
                 else:
@@ -119,31 +119,31 @@ class Linear(Layer):
 
         return lambdaft
 
-    def compute_fisher_inverse_adp(self, grad_input, input, softmax, epsilont=0.01):
+    def compute_fisher_inverse_adp(self, grad_input, input_, softmax, epsilont=0.01):
         """
         # TODO: Optimize complexity, implement fisher4b
 
         :param grad_input: batch_size*output_dim
-        :param input: batch_size*input_dim
+        :param input_: batch_size*input_dim
         :param softmax: batch_size*output_dim
         :param epsilont: controls the speed of iterative
         :return:
         """
         vec_dim = self.input_dim * self.output_dim
         fisher_init = np.outer(grad_input[0, :], input[0, :]).reshape((vec_dim, 1)) @ np.outer(grad_input[0, :],
-                                                                                               input[0, :]).reshape(
+                                                                                               input_[0, :]).reshape(
             (vec_dim, 1)).T
         fisher_inv = linalg.pinv(fisher_init)
         for i in range(self.batch_size)[1:]:
             softmaxi = softmax[i, :]
-            lambdaf = self.compute_lambdaf(softmaxi, input, i)
+            lambdaf = self.compute_lambdaf(softmaxi, input_, i)
             fisher_inv = (1 + epsilont) * fisher_inv - epsilont * (fisher_inv @ lambdaf) @ (fisher_inv @ lambdaf).T
-        fisher4w = fisher_inv @ (input.T @ grad_input).reshape((vec_dim, 1))
+        fisher4w = fisher_inv @ (input_.T @ grad_input).reshape((vec_dim, 1))
         fisher4w = fisher4w.reshape(self.input_dim, self.output_dim) / (fisher4w.max())
 
         return fisher4w
 
-    def backward(self, input, grad_input, softmax=None):
+    def backward(self, input_, grad_input, softmax=None):
         """
 
         :param input: The shape is (batch_size*input_dim)
@@ -158,7 +158,7 @@ class Linear(Layer):
         # print(dEdX.shape)
 
         # compute gradients of W and b;  dE/dW and dE/db
-        dEdW = input.T @ grad_input / self.batch_size  # (input_channel * batch_size) * (batch_size * output_channel).
+        dEdW = input_.T @ grad_input / self.batch_size  # (input_channel * batch_size) * (batch_size * output_channel).
         dEdb = grad_input.sum(axis=0,
                               keepdims=True) / self.batch_size  # (batch_size * output_channel) sum over batch_size
 
@@ -168,12 +168,12 @@ class Linear(Layer):
 
         # Update self.w and self.b
         if (usefisher == True) and (adaptive == False):
-            fisher4w, fisher4b = self.compute_fisher_inverse(grad_input, input)
+            fisher4w, fisher4b = self.compute_fisher_inverse(grad_input, input_)
             self.w = self.w - learning_rate * fisher4w
             self.b = self.b - learning_rate * fisher4b
 
         if (usefisher == True) and (adaptive == True):
-            fisher4w = self.compute_fisher_inverse_adp(grad_input, input, softmax)
+            fisher4w = self.compute_fisher_inverse_adp(grad_input, input_, softmax)
             fisher4b = dEdb
             self.w = self.w - learning_rate * fisher4w
             self.b = self.b - learning_rate * fisher4b  #
@@ -191,39 +191,39 @@ class LossModule(Layer):
     def __init__(self, batch_size):
         self.batch_size = batch_size
 
-    def compute_loss_f(self, input, target):
+    def compute_loss_f(self, input_, target):
         """
-        :param input: The shape of input must be batch_size*3
+        :param input_: The shape of input must be batch_size*3
         :param target: The shape should be batch_size*1
         :return: Return a scalar loss value and a `f` vector with shape(batch_size*1)
         """
-        assert input.shape[0] == self.batch_size
-        assert input.shape[1] == 3  # There are 3 classes
+        assert input_.shape[0] == self.batch_size
+        assert input_.shape[1] == 3  # There are 3 classes
         # One-hot encoding
-        one_hot_target = np.zeros_like(input)
-        one_hot_target[np.arange(len(input)), target] = 1
+        one_hot_target = np.zeros_like(input_)
+        one_hot_target[np.arange(len(input_)), target] = 1
 
         # np.sum(a,axis=1,keepdims=True) This return a vector with shape (batch_size,1) but not (batch_size,)
         # input = input - input.max(axis=1,keepdims=True)  ###
-        logits = np.exp(input) / np.sum(np.exp(input), axis=1, keepdims=True)
+        logits = np.exp(input_) / np.sum(np.exp(input_), axis=1, keepdims=True)
 
-        # print(input)
+        # print(input_)
         f = np.sum(np.multiply(one_hot_target, logits), axis=1, keepdims=True)
         assert f.shape == (self.batch_size, 1)
         # Here we define loss as negative of log likelihood
         loss = -np.sum(np.log(f))
         return loss
 
-    def backward(self, input, target):
+    def backward(self, input_, target):
         """
-        :param input:  The shape of input must be batch_size*3
+        :param input_:  The shape of input must be batch_size*3
         :param target: The shape should be batch_size*1. The values of target are 0,1,2
         :return: The gradient dL/d(wx) with shape batch_size*3
         """
         # backward pass, compute dE/dZ  Z:batch_size*3
-        one_hot_target = np.zeros_like(input)
-        one_hot_target[np.arange(len(input)), target] = 1
-        softmax = np.exp(input) / np.exp(input).sum(axis=1, keepdims=True)  # broadcasting. e.g. b_z*3 / b_z
+        one_hot_target = np.zeros_like(input_)
+        one_hot_target[np.arange(len(input_)), target] = 1
+        softmax = np.exp(input_) / np.exp(input_).sum(axis=1, keepdims=True)  # broadcasting. e.g. b_z*3 / b_z
         bp4gd = (-one_hot_target + softmax)
         return softmax, bp4gd
 
@@ -244,11 +244,11 @@ y_test = data.iloc[100:, 4].to_numpy().astype(int)
 
 # The boolean variables are used to control applied algorithms
 adaptive = False
-usefisher = False
+usefisher = True
 # usefisher = False # uncomment this command to see the effect of traditional gradient descent.
 
 # Network setup
-learning_rate = 0.002
+learning_rate = 0.001
 batch_size = 100
 net = []
 net.append(Linear(batch_size, 4, 5, learning_rate, adaptive, usefisher))
@@ -313,7 +313,7 @@ for epoch in range(1000):
     train_log.append(loss)
     val_log.append(np.mean(predict(net, x_test) == y_test))
 
-# display
+# Display
 mpl.style.use('seaborn')
 plt.title('Training curve-GD', fontsize=20)
 plt.xlabel('Iteration', fontsize=20)
